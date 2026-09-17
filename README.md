@@ -33,8 +33,8 @@ flowchart LR
 ## Quick start
 
 ~~~bash
-git clone https://github.com/sandeep848/Redshift_Analytics.git
-cd Redshift_Analytics
+git clone https://github.com/sandeep848/redshift-streaming-analytics.git
+cd redshift-streaming-analytics
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
