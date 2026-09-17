@@ -1,168 +1,123 @@
 # Redshift Streaming Analytics
 
-Streaming analytics pipeline for Redshift query metrics with Kafka ingestion, DuckDB rollups, and a Streamlit UI.
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB.svg)](https://www.python.org/)
+[![Kafka](https://img.shields.io/badge/Streaming-Kafka-231F20.svg)](https://kafka.apache.org/)
+[![Docker](https://img.shields.io/badge/Runtime-Docker-2496ED.svg)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+An end-to-end streaming analytics pipeline for replaying, validating and analyzing Amazon Redshift query metrics. Kafka carries the event stream, DuckDB provides a lightweight local analytics store, and Streamlit exposes operational and historical views.
+
+## Architecture
+
+~~~mermaid
+flowchart LR
+    A["Query metrics"] --> B["Kafka producer"]
+    B --> C["Kafka topics"]
+    C --> D["DuckDB consumer"]
+    C --> E["Redshift loader"]
+    D --> F["Streamlit dashboard"]
+    E --> G["S3 and Redshift"]
+~~~
 
 ## Features
-- Kafka replay producer that cleans, enriches, and de-duplicates query metrics.
-- DuckDB consumer for local analytics and rollups.
-- Optional Redshift loader that stages batches to S3 and COPYs into Redshift.
-- Streamlit dashboards for live and historical insights.
-- Typed configuration with environment-variable overrides.
-- Structured logging and health-friendly CLI entrypoints.
 
-## Project layout
-```
-configs/          # App + logging configs and SQL schemas
-scripts/          # Bootstrap helpers
-src/              # Application source
-  common/         # Settings, logging, schema utilities
-  consumers/      # Kafka consumers (DuckDB, Redshift)
-  producer/       # Kafka replay producer
-  storage/        # DuckDB, S3, Redshift clients
-  ui/             # Streamlit UI
-```
+- Cleaning, enrichment and deterministic de-duplication
+- Kafka raw and processed topics
+- DuckDB ingestion and analytical rollups
+- Optional S3 staging and Redshift `COPY` loading
+- Typed configuration with environment overrides
+- Structured logging and checkpointed replay state
+- Docker Compose development environment
+- Automated unit tests and end-to-end sanity checks
 
-## Requirements
-- Python 3.11+
-- Docker (optional, for Kafka + Zookeeper)
-- AWS credentials (only if using the Redshift loader)
+## Quick start
 
-## Setup
-
-Create and activate your virtual environment:
-
-### Windows (PowerShell / CMD)
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1   # PowerShell
-# or .venv\Scripts\activate.bat for CMD
-
-pip install -e ".[dev]"
-copy .env.example .env
-```
-
-### macOS / Linux
-```bash
+~~~bash
+git clone https://github.com/sandeep848/Redshift_Analytics.git
+cd Redshift_Analytics
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env
-```
-
----
-
-## Development
-
-First, make sure Docker Desktop or your Docker daemon is running.
-
-### 1. Start Kafka Stack
-Starts Kafka and Zookeeper in the background:
-```bash
 docker compose up -d
-# Or: make up
-```
-
-### 2. Create Kafka Topics (Once)
-Create the required `query_metrics_raw` and `query_metrics_processed` topics inside the container:
-
-**Windows (PowerShell/CMD):**
-```powershell
-docker exec kafka kafka-topics --bootstrap-server localhost:9092 --create --if-not-exists --topic query_metrics_raw --partitions 3 --replication-factor 1
-docker exec kafka kafka-topics --bootstrap-server localhost:9092 --create --if-not-exists --topic query_metrics_processed --partitions 3 --replication-factor 1
-```
-
-**macOS / Linux:**
-```bash
 make topics
-```
-
-### 3. Bootstrap DuckDB Database
-Initializes the DuckDB database file (`data/analytics.duckdb`) and schemas:
-
-**Windows (PowerShell):**
-```powershell
-$env:PYTHONUTF8=1
-python -m scripts.bootstrap_duckdb
-```
-
-**Windows (CMD):**
-```cmd
-set PYTHONUTF8=1
-python -m scripts.bootstrap_duckdb
-```
-
-**macOS / Linux:**
-```bash
 make bootstrap
-```
+~~~
 
-### 4. Run the Pipeline Components
-Run these in separate terminals (ensure the virtual environment is activated in each):
+On Windows, use `.venv\Scripts\Activate.ps1` and copy the environment template with `copy .env.example .env`.
 
-* **DuckDB Consumer**:
-  ```bash
-  python -m src.main consumer-duckdb
-  # Or: make consumer-db
-  ```
-* **Replay Producer**:
-  ```bash
-  python -m src.main producer
-  # Or: make producer
-  ```
-* **Analytics Dashboard UI**:
-  ```bash
-  python -m src.main ui
-  # Or: make run-ui
-  ```
+Run the components in separate terminals:
 
-### 5. Running Tests & Sanity Checks
-* **Running Pytest**:
-  ```bash
-  pytest
-  # Or: make test
-  ```
-* **End-to-End Sanity Check (Windows)**:
-  ```powershell
-  $env:PYTHONUTF8=1
-  python -m scripts.run_sanity_checks
-  ```
+~~~bash
+python -m src.main consumer-duckdb
+python -m src.main producer
+python -m src.main ui
+~~~
 
-## CLI usage
-The project exposes a single CLI entrypoint:
-```bash
+## Command-line interface
+
+~~~bash
 python -m src.main --help
-```
+~~~
 
-Subcommands:
-- `producer` — replay query metrics from a parquet file/URL into Kafka.
-- `consumer-duckdb` — write processed events into DuckDB and maintain rollups.
-- `consumer-redshift` — batch events to S3 and load into Redshift.
-- `bootstrap-duckdb` — initialize DuckDB schema.
-- `ui` — launch the Streamlit UI.
-
-## Configuration
-All configuration lives in `configs/app.yaml` and can be overridden with `.env` variables. See `docs/configuration.md` for details.
+| Command | Purpose |
+|---|---|
+| `producer` | Replay query metrics into Kafka |
+| `consumer-duckdb` | Persist events and update DuckDB rollups |
+| `consumer-redshift` | Stage batches to S3 and load Redshift |
+| `bootstrap-duckdb` | Initialize the local analytics schema |
+| `ui` | Start the Streamlit application |
 
 ## Testing
-```bash
-make test
-```
+
+~~~bash
+pytest
+~~~
+
+Run the local end-to-end checks with:
+
+~~~bash
+python -m scripts.run_sanity_checks
+~~~
+
+## Configuration and security
+
+Configuration defaults live in `configs/app.yaml` and can be overridden through environment variables documented in [`.env.example`](.env.example). Real AWS credentials and application secrets must never be committed. For production, use an external secret manager and least-privilege IAM roles.
+
+## Repository structure
+
+~~~text
+configs/            # Application, logging and SQL configuration
+src/common/         # Settings, schemas and logging
+src/producer/       # Kafka replay producer
+src/consumers/      # DuckDB and Redshift consumers
+src/storage/        # DuckDB, S3 and Redshift clients
+src/ui/             # Streamlit interface
+tests/              # Automated tests
+docs/               # Architecture and configuration notes
+~~~
 
 ## Deployment
-A production-ready Docker image can be built with:
-```bash
+
+~~~bash
 docker build -t redshift-streaming-analytics .
-```
+~~~
 
-Use `docker-compose.yml` for Kafka. The application expects secrets via environment variables (see `.env.example`).
+The optional Redshift path requires an AWS account, S3 bucket, Redshift cluster and correctly scoped permissions. The DuckDB path can be run entirely locally.
 
-## Known limitations / future improvements
-- The Redshift loader requires valid AWS credentials and an existing Redshift cluster.
-- Streamlit pages assume a running Kafka pipeline for live updates.
-- Add managed secrets integration (e.g., AWS Secrets Manager) for production.
+## Limitations
+
+- The repository demonstrates the data path but does not provision managed AWS infrastructure.
+- Streamlit live views require the local pipeline to be running.
+- Production deployments still need managed observability, secret rotation and retention policies.
 
 ## Documentation
-- Configuration reference: `docs/configuration.md`
-- Pipeline & storage overview: `docs/architecture.md`
-- Kafka topics and data contracts: `docs/kafka.md`
-- API notes: `docs/api.md`
+
+- [Architecture](docs/architecture.md)
+- [Configuration](docs/configuration.md)
+- [Kafka contracts](docs/kafka.md)
+- [API notes](docs/api.md)
+
+## License
+
+Distributed under the [MIT License](LICENSE).
